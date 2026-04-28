@@ -1,7 +1,12 @@
-# Este archivo representa un workflow vulnerable de GitHub Actions.
-# Se hizo para probar el analizador con errores intencionales de seguridad.
-# Incluye permisos amplios, uso de pull_request_target, actions sin hash fijo
-# y una variable que parece contener un secreto en texto plano.
+# CASO DE USO 1: Workflow inseguro que NO pasa
+#
+# Contexto:
+# Este caso representa un equipo que acepta pull requests externos.
+# El pipeline está mal configurado porque usa permisos amplios, un evento sensible,
+# una action sin hash fijo y una posible clave escrita en texto plano.
+#
+# Por qué no pasa:
+# El analizador detecta riesgos críticos y altos. Por seguridad, el pipeline debe fallar.
 
 name: Vulnerable CI
 
