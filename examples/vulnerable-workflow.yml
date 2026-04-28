@@ -1,21 +1,28 @@
-# CASO DE USO 1: Workflow inseguro que NO pasa
+# CASO DE USO 2: Workflow seguro que SÍ pasa
 #
 # Contexto:
-# Este caso representa un equipo que acepta pull requests externos.
-# El pipeline está mal configurado porque usa permisos amplios, un evento sensible,
-# una action sin hash fijo y una posible clave escrita en texto plano.
+# Este caso representa el mismo escenario anterior, pero después de aplicar correcciones.
+# El equipo ajusta el pipeline siguiendo buenas prácticas de seguridad en CI/CD.
 #
-# Por qué no pasa:
-# El analizador detecta riesgos críticos y altos. Por seguridad, el pipeline debe fallar.
+# Cambios realizados:
+# - Se reemplaza pull_request_target por pull_request para evitar ejecución sobre código no confiable
+# - Se reducen los permisos a solo lectura (principio de mínimo privilegio)
+# - Se elimina el secreto en texto plano y se usa GitHub Secrets
+# - Se fija la action a un commit SHA para evitar cambios externos no controlados
+#
+# Por qué sí pasa:
+# El analizador no detecta vulnerabilidades porque la configuración ahora cumple
+# con prácticas seguras en pipelines de GitHub Actions.
 
-name: Vulnerable CI
+name: Secure CI
 
-on: pull_request_target
+on: pull_request
 
-permissions: write-all
+permissions:
+  contents: read
 
 env:
-  API_KEY: "123456-secret-key"
+  API_KEY: ${{ secrets.API_KEY }}
 
 jobs:
   build:
@@ -23,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744
 
       - name: Install dependencies
         run: pip install -r requirements.txt

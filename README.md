@@ -4,7 +4,7 @@
 
 El uso principal del proyecto es analizar un archivo YAML de GitHub Actions para identificar configuraciones inseguras.
 
-### 1. Clonar el repositorio
+## 1. Clonar el repositorio
 
 ```bash
 git clone https://github.com/t0masespitia/ci-security-analyzer.git
