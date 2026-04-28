@@ -1,0 +1,27 @@
+# Este archivo representa un workflow vulnerable de GitHub Actions.
+# Se hizo para probar el analizador con errores intencionales de seguridad.
+# Incluye permisos amplios, uso de pull_request_target, actions sin hash fijo
+# y una variable que parece contener un secreto en texto plano.
+
+name: Vulnerable CI
+
+on: pull_request_target
+
+permissions: write-all
+
+env:
+  API_KEY: "123456-secret-key"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest

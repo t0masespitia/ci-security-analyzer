@@ -1,0 +1,6 @@
+# Este archivo se hizo para dejar claras las librerías que necesita el proyecto.
+# Sirve para que cualquier persona pueda instalar el entorno y ejecutar el analizador
+# sin tener que adivinar qué paquetes hacen falta.
+
+PyYAML==6.0.2
+pytest==8.3.3
