@@ -1,3 +1,42 @@
+# CASO DE USO 1: Workflow inseguro que NO pasa
+#
+# Contexto:
+# Este caso representa un equipo que acepta pull requests externos.
+# El pipeline está mal configurado porque usa permisos amplios, un evento sensible,
+# una action sin hash fijo y una posible clave escrita en texto plano.
+#
+# Por qué no pasa:
+# El analizador detecta riesgos críticos y altos. Por seguridad, el pipeline debe fallar.
+
+name: Vulnerable CI
+
+on: pull_request_target
+
+permissions: write-all
+
+env:
+  API_KEY: "123456-secret-key"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest
+
+
+
+
+#----------
+
+
 # CASO DE USO 2: Workflow seguro que SÍ pasa
 #
 # Contexto:
@@ -14,26 +53,28 @@
 # El analizador no detecta vulnerabilidades porque la configuración ahora cumple
 # con prácticas seguras en pipelines de GitHub Actions.
 
-name: Secure CI
 
-on: pull_request
+#Quitar los numerales o agregarlos desde aca para ver el fiuncionamiento de cada caso
+#name: Secure CI
 
-permissions:
-  contents: read
+#on: pull_request
 
-env:
-  API_KEY: ${{ secrets.API_KEY }}
+#permissions:
+  #contents: read
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+#env:
+  #API_KEY: ${{ secrets.API_KEY }}
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744
+#jobs:
+  #build:
+    #runs-on: ubuntu-latest
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+    #steps:
+      #- name: Checkout repository
+        #uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744
 
-      - name: Run tests
-        run: pytest
+      #- name: Install dependencies
+        #run: pip install -r requirements.txt
+
+      #- name: Run tests
+        #run: pytest
