@@ -6,12 +6,7 @@ Las pruebas ayudan a demostrar que las reglas no están solo escritas,
 sino que realmente funcionan sobre estructuras YAML simuladas.
 """
 
-import sys
-import os
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "analyzer")))
-
-from rules import run_all_rules
+from analyzer.rules import run_all_rules
 
 
 def test_detects_write_all_permissions():
@@ -33,7 +28,57 @@ def test_detects_pull_request_target():
 
     findings = run_all_rules(data)
 
-    assert any(finding["rule_id"] == "CICD-TRIGGER-001" for finding in findings)
+    rule_ids = [f["rule_id"] for f in findings]
+    assert "CICD-TRIGGER-001" in rule_ids
+    assert "CICD-TRIGGER-002" not in rule_ids
+
+
+def test_detects_poisoned_pipeline_execution():
+    data = {
+        "on": "pull_request_target",
+        "jobs": {
+            "build": {
+                "steps": [
+                    {
+                        "uses": "actions/checkout@v3",
+                        "with": {
+                            "ref": "${{ github.event.pull_request.head.sha }}"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+
+    findings = run_all_rules(data)
+
+    rule_ids = [f["rule_id"] for f in findings]
+    assert "CICD-TRIGGER-002" in rule_ids
+    assert "CICD-TRIGGER-001" not in rule_ids
+    ppe = next(f for f in findings if f["rule_id"] == "CICD-TRIGGER-002")
+    assert ppe["severity"] == "CRITICAL"
+
+
+def test_detects_poisoned_pipeline_execution_with_head_ref():
+    data = {
+        "on": {"pull_request_target": None},
+        "jobs": {
+            "build": {
+                "steps": [
+                    {
+                        "uses": "actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744",
+                        "with": {
+                            "ref": "${{ github.head_ref }}"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+
+    findings = run_all_rules(data)
+
+    assert any(f["rule_id"] == "CICD-TRIGGER-002" for f in findings)
 
 
 def test_detects_unpinned_action():

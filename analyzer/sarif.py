@@ -9,7 +9,7 @@ sino que también puede producir evidencia estructurada.
 import json
 
 
-def generate_sarif(findings, output_path):
+def generate_sarif(findings, output_path, workflow_path=None):
     """
     Genera un archivo SARIF básico con los hallazgos encontrados.
     """
@@ -52,13 +52,29 @@ def generate_sarif(findings, output_path):
 
             added_rules.add(rule_id)
 
-        sarif["runs"][0]["results"].append({
+        result = {
             "ruleId": rule_id,
             "level": map_severity_to_sarif_level(finding["severity"]),
             "message": {
                 "text": f"{finding['title']}: {finding['description']}"
             }
-        })
+        }
+
+        if "line" in finding and workflow_path is not None:
+            result["locations"] = [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {
+                            "uri": workflow_path.replace("\\", "/")
+                        },
+                        "region": {
+                            "startLine": finding["line"]
+                        }
+                    }
+                }
+            ]
+
+        sarif["runs"][0]["results"].append(result)
 
     with open(output_path, "w", encoding="utf-8") as file:
         json.dump(sarif, file, indent=2, ensure_ascii=False)

@@ -7,10 +7,108 @@
         "driver": {
           "name": "CI Security Analyzer",
           "informationUri": "https://github.com/t0masespitia/ci-security-analyzer",
-          "rules": []
+          "rules": [
+            {
+              "id": "CICD-PERM-001",
+              "name": "Permisos write-all detectados",
+              "shortDescription": {
+                "text": "Permisos write-all detectados"
+              },
+              "fullDescription": {
+                "text": "El workflow usa permissions: write-all, lo cual entrega permisos amplios al pipeline."
+              },
+              "help": {
+                "text": "Usar permisos mínimos, por ejemplo contents: read."
+              }
+            },
+            {
+              "id": "CICD-ACTION-001",
+              "name": "Action sin hash fijo",
+              "shortDescription": {
+                "text": "Action sin hash fijo"
+              },
+              "fullDescription": {
+                "text": "La acción 'actions/checkout@v3' en el job 'build' no está fijada a un commit SHA."
+              },
+              "help": {
+                "text": "Usar un hash de commit completo para reducir riesgos de manipulación."
+              }
+            },
+            {
+              "id": "CICD-SECRET-001",
+              "name": "Posible secreto en texto plano",
+              "shortDescription": {
+                "text": "Posible secreto en texto plano"
+              },
+              "fullDescription": {
+                "text": "La variable 'API_KEY' en 'nivel global' parece contener un secreto sin usar GitHub Secrets."
+              },
+              "help": {
+                "text": "Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}."
+              }
+            }
+          ]
         }
       },
-      "results": []
+      "results": [
+        {
+          "ruleId": "CICD-PERM-001",
+          "level": "error",
+          "message": {
+            "text": "Permisos write-all detectados: El workflow usa permissions: write-all, lo cual entrega permisos amplios al pipeline."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "examples/vulnerable-workflow.yml"
+                },
+                "region": {
+                  "startLine": 15
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CICD-ACTION-001",
+          "level": "error",
+          "message": {
+            "text": "Action sin hash fijo: La acción 'actions/checkout@v3' en el job 'build' no está fijada a un commit SHA."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "examples/vulnerable-workflow.yml"
+                },
+                "region": {
+                  "startLine": 26
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CICD-SECRET-001",
+          "level": "error",
+          "message": {
+            "text": "Posible secreto en texto plano: La variable 'API_KEY' en 'nivel global' parece contener un secreto sin usar GitHub Secrets."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "examples/vulnerable-workflow.yml"
+                },
+                "region": {
+                  "startLine": 18
+                }
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

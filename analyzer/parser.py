@@ -10,16 +10,18 @@ import yaml
 
 def load_yaml_file(file_path):
     """
-    Lee un archivo YAML y devuelve su contenido como diccionario de Python.
+    Lee un archivo YAML y devuelve (contenido_parseado, texto_crudo).
     """
     try:
         with open(file_path, "r", encoding="utf-8") as file:
-            content = yaml.safe_load(file)
+            raw_text = file.read()
+
+        content = yaml.safe_load(raw_text)
 
         if content is None:
-            return {}
+            return {}, ""
 
-        return content
+        return content, raw_text
 
     except FileNotFoundError:
         raise FileNotFoundError(f"No se encontró el archivo: {file_path}")

@@ -1,1 +1,20 @@
-No se encontraron vulnerabilidades en el workflow analizado.
+Hallazgos encontrados:
+------------------------------------------------------------
+Regla: CICD-PERM-001
+Severidad: HIGH
+Título: Permisos write-all detectados
+Descripción: El workflow usa permissions: write-all, lo cual entrega permisos amplios al pipeline.
+Recomendación: Usar permisos mínimos, por ejemplo contents: read.
+------------------------------------------------------------
+Regla: CICD-ACTION-001
+Severidad: HIGH
+Título: Action sin hash fijo
+Descripción: La acción 'actions/checkout@v3' en el job 'build' no está fijada a un commit SHA.
+Recomendación: Usar un hash de commit completo para reducir riesgos de manipulación.
+------------------------------------------------------------
+Regla: CICD-SECRET-001
+Severidad: CRITICAL
+Título: Posible secreto en texto plano
+Descripción: La variable 'API_KEY' en 'nivel global' parece contener un secreto sin usar GitHub Secrets.
+Recomendación: Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}.
+------------------------------------------------------------

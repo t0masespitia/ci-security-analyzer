@@ -9,26 +9,28 @@ eventos peligrosos y exposición de secretos.
 import re
 
 
-def create_finding(rule_id, severity, title, description, recommendation):
-    """
-    Crea un hallazgo con una estructura uniforme.
-    """
-    return {
+def create_finding(rule_id, severity, title, description, recommendation, line=None):
+    finding = {
         "rule_id": rule_id,
         "severity": severity,
         "title": title,
         "description": description,
         "recommendation": recommendation
     }
+    if line is not None:
+        finding["line"] = line
+    return finding
 
 
-def check_permissions_write_all(data):
-    """
-    Detecta si el pipeline usa permissions: write-all.
-    Esto es riesgoso porque otorga permisos amplios al token del pipeline.
-    """
+def find_line(raw_text, search_string):
+    for i, line in enumerate(raw_text.splitlines(), start=1):
+        if search_string in line:
+            return i
+    return None
+
+
+def check_permissions_write_all(data, raw_text=None):
     findings = []
-
     permissions = data.get("permissions")
 
     if permissions == "write-all":
@@ -37,7 +39,8 @@ def check_permissions_write_all(data):
             "HIGH",
             "Permisos write-all detectados",
             "El workflow usa permissions: write-all, lo cual entrega permisos amplios al pipeline.",
-            "Usar permisos mínimos, por ejemplo contents: read."
+            "Usar permisos mínimos, por ejemplo contents: read.",
+            line=find_line(raw_text, "write-all") if raw_text else None
         ))
 
     if isinstance(permissions, dict):
@@ -48,56 +51,81 @@ def check_permissions_write_all(data):
                     "HIGH",
                     "Permiso write detectado",
                     f"El permiso '{permission_name}' está configurado con acceso write.",
-                    "Revisar si realmente se necesita write. Si no, cambiarlo a read."
+                    "Revisar si realmente se necesita write. Si no, cambiarlo a read.",
+                    line=find_line(raw_text, f"{permission_name}: write") if raw_text else None
                 ))
 
     return findings
 
 
-def check_pull_request_target(data):
-    """
-    Detecta el uso del evento pull_request_target.
-    Este evento puede ser peligroso si se combina con código externo o checkout inseguro.
-    """
+def _has_pull_request_target(trigger):
+    if trigger == "pull_request_target":
+        return True
+    if isinstance(trigger, list) and "pull_request_target" in trigger:
+        return True
+    if isinstance(trigger, dict) and "pull_request_target" in trigger:
+        return True
+    return False
+
+
+def _find_unsafe_pr_ref(data):
+    """Returns the dangerous ref string if found, otherwise None."""
+    dangerous_refs = ("github.event.pull_request", "github.head_ref")
+
+    jobs = data.get("jobs", {})
+    if not isinstance(jobs, dict):
+        return None
+
+    for job_config in jobs.values():
+        for step in job_config.get("steps", []):
+            if not isinstance(step, dict):
+                continue
+            uses = step.get("uses", "")
+            if not isinstance(uses, str) or not uses.startswith("actions/checkout"):
+                continue
+            ref = str(step.get("with", {}).get("ref", ""))
+            for dangerous in dangerous_refs:
+                if dangerous in ref:
+                    return dangerous
+    return None
+
+
+def check_pull_request_target(data, raw_text=None):
     findings = []
 
-    trigger = data.get("on")
+    if not _has_pull_request_target(data.get("on")):
+        return findings
 
-    if trigger == "pull_request_target":
+    dangerous_ref = _find_unsafe_pr_ref(data)
+
+    if dangerous_ref:
         findings.append(create_finding(
-            "CICD-TRIGGER-001",
+            "CICD-TRIGGER-002",
             "CRITICAL",
-            "Uso de pull_request_target",
-            "El workflow se ejecuta con pull_request_target, un evento sensible en GitHub Actions.",
-            "Usar pull_request cuando sea posible o restringir cuidadosamente el workflow."
+            "Poisoned Pipeline Execution: pull_request_target con checkout inseguro",
+            "El workflow usa pull_request_target y hace checkout del código del PR con "
+            "github.event.pull_request o github.head_ref, permitiendo que código no confiable "
+            "se ejecute con los permisos del repositorio base.",
+            "Eliminar el ref al código del PR en el checkout, o reemplazar pull_request_target "
+            "por pull_request.",
+            line=find_line(raw_text, dangerous_ref) if raw_text else None
         ))
-
-    if isinstance(trigger, list) and "pull_request_target" in trigger:
+    else:
         findings.append(create_finding(
             "CICD-TRIGGER-001",
-            "CRITICAL",
+            "HIGH",
             "Uso de pull_request_target",
-            "El workflow incluye pull_request_target dentro de sus eventos.",
-            "Evitar este evento si el pipeline ejecuta código de contribuciones externas."
-        ))
-
-    if isinstance(trigger, dict) and "pull_request_target" in trigger:
-        findings.append(create_finding(
-            "CICD-TRIGGER-001",
-            "CRITICAL",
-            "Uso de pull_request_target",
-            "El workflow tiene configurado pull_request_target.",
-            "Validar estrictamente qué código se ejecuta y evitar checkout de ramas no confiables."
+            "El workflow usa pull_request_target, un evento que se ejecuta con los permisos "
+            "del repositorio base y puede ser peligroso si se combina con código externo.",
+            "Usar pull_request cuando sea posible o asegurarse de no hacer checkout del "
+            "código de la rama del PR.",
+            line=find_line(raw_text, "pull_request_target") if raw_text else None
         ))
 
     return findings
 
 
-def check_unpinned_actions(data):
-    """
-    Detecta acciones usadas con tags o ramas en vez de hashes de commit.
-    Usar actions/checkout@v3 es menos seguro que fijar la acción a un commit SHA.
-    """
+def check_unpinned_actions(data, raw_text=None):
     findings = []
     jobs = data.get("jobs", {})
 
@@ -105,51 +133,40 @@ def check_unpinned_actions(data):
         return findings
 
     for job_name, job_config in jobs.items():
-        steps = job_config.get("steps", [])
-
-        for step in steps:
+        for step in job_config.get("steps", []):
             if not isinstance(step, dict):
                 continue
 
             uses = step.get("uses")
+            if not uses:
+                continue
 
-            if uses:
-                parts = uses.split("@")
-
-                if len(parts) == 2:
-                    version = parts[1]
-
-                    is_sha = bool(re.fullmatch(r"[a-fA-F0-9]{40}", version))
-
-                    if not is_sha:
-                        findings.append(create_finding(
-                            "CICD-ACTION-001",
-                            "HIGH",
-                            "Action sin hash fijo",
-                            f"La acción '{uses}' en el job '{job_name}' no está fijada a un commit SHA.",
-                            "Usar un hash de commit completo para reducir riesgos de manipulación."
-                        ))
+            parts = uses.split("@")
+            if len(parts) == 2:
+                is_sha = bool(re.fullmatch(r"[a-fA-F0-9]{40}", parts[1]))
+                if not is_sha:
+                    findings.append(create_finding(
+                        "CICD-ACTION-001",
+                        "HIGH",
+                        "Action sin hash fijo",
+                        f"La acción '{uses}' en el job '{job_name}' no está fijada a un commit SHA.",
+                        "Usar un hash de commit completo para reducir riesgos de manipulación.",
+                        line=find_line(raw_text, uses) if raw_text else None
+                    ))
 
     return findings
 
 
-def check_plaintext_secrets(data):
-    """
-    Detecta posibles secretos escritos directamente en variables env.
-    No es una detección perfecta, pero ayuda a encontrar malas prácticas evidentes.
-    """
+def check_plaintext_secrets(data, raw_text=None):
     findings = []
-
     risky_words = ["TOKEN", "SECRET", "PASSWORD", "API_KEY", "ACCESS_KEY"]
 
     def scan_env(env_data, location):
         if not isinstance(env_data, dict):
             return
-
         for key, value in env_data.items():
             key_upper = str(key).upper()
             value_text = str(value)
-
             if any(word in key_upper for word in risky_words):
                 if "${{ secrets." not in value_text:
                     findings.append(create_finding(
@@ -157,7 +174,8 @@ def check_plaintext_secrets(data):
                         "CRITICAL",
                         "Posible secreto en texto plano",
                         f"La variable '{key}' en '{location}' parece contener un secreto sin usar GitHub Secrets.",
-                        "Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}."
+                        "Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}.",
+                        line=find_line(raw_text, str(key)) if raw_text else None
                     ))
 
     scan_env(data.get("env"), "nivel global")
@@ -166,24 +184,17 @@ def check_plaintext_secrets(data):
     if isinstance(jobs, dict):
         for job_name, job_config in jobs.items():
             scan_env(job_config.get("env"), f"job {job_name}")
-
-            steps = job_config.get("steps", [])
-            for index, step in enumerate(steps):
+            for index, step in enumerate(job_config.get("steps", [])):
                 if isinstance(step, dict):
                     scan_env(step.get("env"), f"job {job_name}, step {index + 1}")
 
     return findings
 
 
-def run_all_rules(data):
-    """
-    Ejecuta todas las reglas de seguridad sobre el YAML cargado.
-    """
+def run_all_rules(data, raw_text=None):
     findings = []
-
-    findings.extend(check_permissions_write_all(data))
-    findings.extend(check_pull_request_target(data))
-    findings.extend(check_unpinned_actions(data))
-    findings.extend(check_plaintext_secrets(data))
-
+    findings.extend(check_permissions_write_all(data, raw_text))
+    findings.extend(check_pull_request_target(data, raw_text))
+    findings.extend(check_unpinned_actions(data, raw_text))
+    findings.extend(check_plaintext_secrets(data, raw_text))
     return findings

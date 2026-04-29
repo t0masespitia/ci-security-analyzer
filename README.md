@@ -1,68 +1,116 @@
-# ci-security-analyzer
+# CI Security Analyzer
 
-## Cómo se usa
+CI Security Analyzer es una herramienta académica de análisis estático para workflows de GitHub Actions. Revisa archivos `.yml` de pipelines CI/CD y detecta configuraciones inseguras antes de que el pipeline se ejecute.
 
-El uso principal del proyecto es analizar un archivo YAML de GitHub Actions para identificar configuraciones inseguras.
+---
 
-1. Clonar el repositorio
+## Requisitos
+
+- Python 3.12 o superior
+- pip
+
+---
+
+## Instalación
 
 ```bash
 git clone https://github.com/t0masespitia/ci-security-analyzer.git
 cd ci-security-analyzer
-2. Instalar dependencias
 pip install -r requirements.txt
-3. Analizar un workflow vulnerable
-python analyzer/main.py examples/vulnerable-workflow.yml
+```
 
-Este comando ejecuta el analizador sobre un archivo de ejemplo que contiene configuraciones inseguras.
+---
 
-4. Interpretar el resultado
+## Uso
 
-Si el workflow tiene problemas, la herramienta muestra hallazgos como:
+### Analizar el workflow vulnerable
 
+```bash
+python -m analyzer.main examples/vulnerable-workflow.yml
+```
+
+### Analizar el workflow corregido
+
+```bash
+python -m analyzer.main examples/fixed-workflow.yml
+```
+
+El workflow corregido no debe producir hallazgos y el programa termina con código de salida `0`.
+
+---
+
+## Cómo interpretar los hallazgos
+
+Cuando el analizador detecta problemas, muestra un bloque por cada hallazgo:
+
+```
+Hallazgos encontrados:
+------------------------------------------------------------
 Regla: CICD-PERM-001
 Severidad: HIGH
 Título: Permisos write-all detectados
-Descripción: El workflow usa permissions: write-all.
+Descripción: El workflow usa permissions: write-all, lo cual entrega permisos amplios al pipeline.
 Recomendación: Usar permisos mínimos, por ejemplo contents: read.
+------------------------------------------------------------
+Regla: CICD-ACTION-001
+Severidad: HIGH
+Título: Action sin hash fijo
+Descripción: La acción 'actions/checkout@v3' en el job 'build' no está fijada a un commit SHA.
+Recomendación: Usar un hash de commit completo para reducir riesgos de manipulación.
+------------------------------------------------------------
+Regla: CICD-SECRET-001
+Severidad: CRITICAL
+Título: Posible secreto en texto plano
+Descripción: La variable 'API_KEY' en 'nivel global' parece contener un secreto sin usar GitHub Secrets.
+Recomendación: Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}.
+------------------------------------------------------------
+```
 
 Cada hallazgo indica:
 
-La regla detectada.
-La severidad del problema.
-Una explicación del riesgo.
-Una recomendación de corrección.
-5. Analizar el workflow corregido
-python analyzer/main.py examples/fixed-workflow.yml
+- **Regla**: identificador de la regla activada.
+- **Severidad**: `CRITICAL`, `HIGH`, `MEDIUM` o `LOW`.
+- **Título**: nombre corto del problema.
+- **Descripción**: explicación del riesgo detectado.
+- **Recomendación**: acción correctiva sugerida.
 
-Este segundo comando sirve para validar que las configuraciones inseguras fueron corregidas.
+Además, se generan dos reportes en la carpeta `reports/`:
 
-6. Revisar los reportes generados
+| Archivo | Descripción |
+|---|---|
+| `reports/scan-output.txt` | Hallazgos en texto plano |
+| `reports/results.sarif` | Hallazgos en formato SARIF (compatible con herramientas de análisis estático) |
 
-Después de ejecutar el analizador, se generan reportes en la carpeta:
+El programa termina con código `1` si se encontraron hallazgos, o `0` si el workflow está limpio.
 
-reports/
+---
 
-Los archivos principales son:
+## Ejecutar los tests
 
-reports/scan-output.txt
-reports/results.sarif
-
-scan-output.txt muestra los hallazgos en texto plano.
-
-results.sarif guarda los hallazgos en formato SARIF, que es usado por herramientas de análisis estático.
-
-7. Ejecutar pruebas
+```bash
 pytest
+```
 
-Este comando ejecuta las pruebas unitarias para verificar que las reglas del analizador funcionan correctamente.
+---
 
+## Estructura del proyecto
 
-Y en el inicio del README pon esto:
-
-```markdown
-# CI Security Analyzer
-
-CI Security Analyzer es una herramienta académica de análisis estático para workflows de GitHub Actions.
-
-Su uso principal es revisar archivos `.yml` de pipelines CI/CD y detectar configuraciones inseguras antes de que el pipeline se ejecute.
+```
+ci-security-analyzer/
+├── analyzer/
+│   ├── __init__.py
+│   ├── main.py        # Punto de entrada principal
+│   ├── parser.py      # Carga y parsea el archivo YAML
+│   ├── rules.py       # Reglas de seguridad
+│   └── sarif.py       # Generación del reporte SARIF
+├── examples/
+│   ├── vulnerable-workflow.yml   # Workflow con configuraciones inseguras
+│   └── fixed-workflow.yml        # Workflow corregido
+├── reports/
+│   ├── scan-output.txt
+│   └── results.sarif
+├── tests/
+│   └── test_rules.py
+├── requirements.txt
+└── README.md
+```

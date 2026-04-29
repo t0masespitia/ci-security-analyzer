@@ -8,9 +8,9 @@ de seguridad, muestra los hallazgos encontrados y genera un reporte SARIF en la 
 import argparse
 import os
 
-from parser import load_yaml_file
-from rules import run_all_rules
-from sarif import generate_sarif
+from analyzer.parser import load_yaml_file
+from analyzer.rules import run_all_rules
+from analyzer.sarif import generate_sarif
 
 
 def print_findings(findings):
@@ -66,14 +66,14 @@ def main():
 
     args = parser.parse_args()
 
-    data = load_yaml_file(args.file)
-    findings = run_all_rules(data)
+    data, raw_text = load_yaml_file(args.file)
+    findings = run_all_rules(data, raw_text)
 
     os.makedirs("reports", exist_ok=True)
 
     print_findings(findings)
     save_text_report(findings, "reports/scan-output.txt")
-    generate_sarif(findings, "reports/results.sarif")
+    generate_sarif(findings, "reports/results.sarif", workflow_path=args.file)
 
     if findings:
         exit(1)
