@@ -107,8 +107,9 @@ def main():
 
         print(f"\nArchivo: {yaml_file}")
         print_findings(findings)
-        save_text_report(findings, "reports/scan-output.txt")
-        generate_sarif(findings, "reports/results.sarif", workflow_path=str(yaml_file))
+
+    save_text_report(all_findings, "reports/scan-output.txt")
+    generate_sarif(all_findings, "reports/results.sarif", workflow_path=str(yaml_files[0]) if yaml_files else None)
 
     print_summary(all_findings_by_file)
 

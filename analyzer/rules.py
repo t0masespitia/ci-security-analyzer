@@ -179,12 +179,14 @@ def _scan_run_script(script, location, raw_text, findings):
         value = match.group(1)
         if value.startswith("$") or value.startswith("%"):
             continue
+        line = find_line(raw_text, match.group(0)) if raw_text else None
         findings.append(create_finding(
             "CICD-SECRET-002",
             "CRITICAL",
             "Posible secreto en texto plano en script",
             f"Se detectó un posible secreto en texto plano en el script de {location}",
             "Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}.",
+            line=line,
         ))
 
 
