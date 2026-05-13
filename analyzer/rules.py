@@ -29,6 +29,14 @@ def find_line(raw_text, search_string):
     return None
 
 
+def _is_safe_value(value_text):
+    return (
+        "${{ secrets." in value_text or
+        "${{ vars." in value_text or
+        "${" in value_text
+    )
+
+
 def check_permissions_write_all(data, raw_text=None):
     findings = []
     permissions = data.get("permissions")
@@ -141,6 +149,9 @@ def check_unpinned_actions(data, raw_text=None):
             if not uses:
                 continue
 
+            if uses.startswith("./") or uses.startswith("docker://"):
+                continue
+
             parts = uses.split("@")
             if len(parts) == 2:
                 is_sha = bool(re.fullmatch(r"[a-fA-F0-9]{40}", parts[1]))
@@ -157,6 +168,26 @@ def check_unpinned_actions(data, raw_text=None):
     return findings
 
 
+def _scan_run_script(script, location, raw_text, findings):
+    if not script or not isinstance(script, str):
+        return
+    pattern = re.compile(
+        r'(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY|PRIVATE_KEY|AUTH)\s*=\s*([a-zA-Z0-9]{8,})',
+        re.IGNORECASE
+    )
+    for match in pattern.finditer(script):
+        value = match.group(1)
+        if value.startswith("$") or value.startswith("%"):
+            continue
+        findings.append(create_finding(
+            "CICD-SECRET-002",
+            "CRITICAL",
+            "Posible secreto en texto plano en script",
+            f"Se detectó un posible secreto en texto plano en el script de {location}",
+            "Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}.",
+        ))
+
+
 def check_plaintext_secrets(data, raw_text=None):
     findings = []
     risky_words = ["TOKEN", "SECRET", "PASSWORD", "API_KEY", "ACCESS_KEY"]
@@ -168,7 +199,7 @@ def check_plaintext_secrets(data, raw_text=None):
             key_upper = str(key).upper()
             value_text = str(value)
             if any(word in key_upper for word in risky_words):
-                if "${{ secrets." not in value_text:
+                if not _is_safe_value(value_text):
                     findings.append(create_finding(
                         "CICD-SECRET-001",
                         "CRITICAL",
@@ -187,6 +218,88 @@ def check_plaintext_secrets(data, raw_text=None):
             for index, step in enumerate(job_config.get("steps", [])):
                 if isinstance(step, dict):
                     scan_env(step.get("env"), f"job {job_name}, step {index + 1}")
+                    _scan_run_script(step.get("run"), f"job {job_name}, step {index + 1}", raw_text, findings)
+
+    return findings
+
+
+def check_container_image_digest(data, raw_text=None):
+    findings = []
+
+    def check_image(image_str, location):
+        if not isinstance(image_str, str) or not image_str:
+            return
+        if image_str.startswith("$") or image_str.startswith("."):
+            return
+        if "@sha256:" not in image_str:
+            findings.append(create_finding(
+                "CICD-IMAGE-001",
+                "MEDIUM",
+                "Imagen de contenedor sin digest SHA256",
+                f"La imagen '{image_str}' en {location} no está fijada a un digest SHA256 inmutable.",
+                "Usar el formato imagen@sha256:<hash> para garantizar reproducibilidad e integridad (SLSA-2).",
+                line=find_line(raw_text, image_str) if raw_text else None
+            ))
+
+    jobs = data.get("jobs", {})
+    if isinstance(jobs, dict):
+        for job_name, job_config in jobs.items():
+            container = job_config.get("container")
+            if isinstance(container, str):
+                check_image(container, f"job '{job_name}'")
+            elif isinstance(container, dict):
+                check_image(container.get("image", ""), f"job '{job_name}'")
+
+            image = job_config.get("image")
+            if isinstance(image, str):
+                check_image(image, f"job '{job_name}'")
+            elif isinstance(image, dict):
+                check_image(image.get("name", ""), f"job '{job_name}'")
+
+    global_image = data.get("image")
+    if isinstance(global_image, str):
+        check_image(global_image, "nivel global")
+    elif isinstance(global_image, dict):
+        check_image(global_image.get("name", ""), "nivel global")
+
+    return findings
+
+
+def check_self_hosted_runner(data, raw_text=None):
+    findings = []
+    isolation_labels = {"isolated", "ephemeral", "docker", "container", "sandbox", "hardened"}
+
+    jobs = data.get("jobs", {})
+    if not isinstance(jobs, dict):
+        return findings
+
+    for job_name, job_config in jobs.items():
+        runs_on = job_config.get("runs-on")
+        if runs_on is None:
+            continue
+
+        if isinstance(runs_on, str):
+            labels = [runs_on]
+        elif isinstance(runs_on, list):
+            labels = [str(l) for l in runs_on]
+        elif isinstance(runs_on, dict):
+            labels = [str(l) for l in runs_on.get("labels", [])]
+        else:
+            continue
+
+        if "self-hosted" not in labels:
+            continue
+
+        if not isolation_labels.intersection(set(labels)):
+            findings.append(create_finding(
+                "CICD-RUNNER-001",
+                "MEDIUM",
+                "Runner self-hosted sin etiquetas de aislamiento",
+                f"El job '{job_name}' usa un runner self-hosted sin etiquetas de aislamiento "
+                f"(ej. ephemeral, docker, isolated). Esto puede permitir persistencia de estado entre ejecuciones.",
+                "Agregar etiquetas de aislamiento al runner o usar entornos efímeros para cada ejecución.",
+                line=find_line(raw_text, "self-hosted") if raw_text else None
+            ))
 
     return findings
 
@@ -197,4 +310,6 @@ def run_all_rules(data, raw_text=None):
     findings.extend(check_pull_request_target(data, raw_text))
     findings.extend(check_unpinned_actions(data, raw_text))
     findings.extend(check_plaintext_secrets(data, raw_text))
+    findings.extend(check_container_image_digest(data, raw_text))
+    findings.extend(check_self_hosted_runner(data, raw_text))
     return findings

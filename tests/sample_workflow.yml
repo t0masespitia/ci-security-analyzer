@@ -1,0 +1,24 @@
+name: CI Pipeline
+
+on: push
+
+permissions: write-all
+
+env:
+  API_KEY: hardcoded-secret-value
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy
+        run: export TOKEN=supersecretvalue123
+      - uses: ./my-local-action
+
+  test:
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Run tests
+        run: echo "running tests"

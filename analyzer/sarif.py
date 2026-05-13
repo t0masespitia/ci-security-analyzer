@@ -8,11 +8,15 @@ sino que también puede producir evidencia estructurada.
 
 import json
 
+SEVERITY_CVSS = {
+    "CRITICAL": "9.5",
+    "HIGH": "7.5",
+    "MEDIUM": "4.5",
+    "LOW": "2.0",
+}
+
 
 def generate_sarif(findings, output_path, workflow_path=None):
-    """
-    Genera un archivo SARIF básico con los hallazgos encontrados.
-    """
     sarif = {
         "version": "2.1.0",
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
@@ -34,6 +38,7 @@ def generate_sarif(findings, output_path, workflow_path=None):
 
     for finding in findings:
         rule_id = finding["rule_id"]
+        severity = finding["severity"]
 
         if rule_id not in added_rules:
             sarif["runs"][0]["tool"]["driver"]["rules"].append({
@@ -47,6 +52,10 @@ def generate_sarif(findings, output_path, workflow_path=None):
                 },
                 "help": {
                     "text": finding["recommendation"]
+                },
+                "properties": {
+                    "security-severity": SEVERITY_CVSS.get(severity, "2.0"),
+                    "tags": ["security", "ci-cd", "owasp"]
                 }
             })
 
@@ -54,9 +63,12 @@ def generate_sarif(findings, output_path, workflow_path=None):
 
         result = {
             "ruleId": rule_id,
-            "level": map_severity_to_sarif_level(finding["severity"]),
+            "level": map_severity_to_sarif_level(severity),
             "message": {
                 "text": f"{finding['title']}: {finding['description']}"
+            },
+            "properties": {
+                "severity": severity
             }
         }
 
@@ -81,9 +93,6 @@ def generate_sarif(findings, output_path, workflow_path=None):
 
 
 def map_severity_to_sarif_level(severity):
-    """
-    Convierte la severidad interna del proyecto a niveles compatibles con SARIF.
-    """
     if severity == "CRITICAL":
         return "error"
 

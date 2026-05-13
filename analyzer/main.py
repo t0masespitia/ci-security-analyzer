@@ -7,16 +7,25 @@ de seguridad, muestra los hallazgos encontrados y genera un reporte SARIF en la 
 
 import argparse
 import os
+from pathlib import Path
 
 from analyzer.parser import load_yaml_file
 from analyzer.rules import run_all_rules
 from analyzer.sarif import generate_sarif
 
+SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
+
+def collect_yaml_files(path_str):
+    p = Path(path_str)
+    if p.is_file():
+        return [p]
+    if p.is_dir():
+        return list(p.rglob("*.yml")) + list(p.rglob("*.yaml"))
+    raise FileNotFoundError(f"No existe la ruta: {path_str}")
+
 
 def print_findings(findings):
-    """
-    Imprime los hallazgos en la terminal de forma clara.
-    """
     if not findings:
         print("No se encontraron vulnerabilidades en el workflow analizado.")
         return
@@ -33,10 +42,21 @@ def print_findings(findings):
         print("-" * 60)
 
 
+def print_summary(all_findings_by_file):
+    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    for findings in all_findings_by_file.values():
+        for f in findings:
+            sev = f.get("severity", "LOW")
+            counts[sev] = counts.get(sev, 0) + 1
+
+    print("\nResumen de hallazgos:")
+    print("-" * 40)
+    for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
+        print(f"{sev}: {counts[sev]}")
+    print(f"TOTAL: {sum(counts.values())}")
+
+
 def save_text_report(findings, output_path):
-    """
-    Guarda un reporte de texto para dejar evidencia de ejecución.
-    """
     with open(output_path, "w", encoding="utf-8") as file:
         if not findings:
             file.write("No se encontraron vulnerabilidades en el workflow analizado.\n")
@@ -60,25 +80,49 @@ def main():
     )
 
     parser.add_argument(
-        "file",
-        help="Ruta del archivo YAML que se quiere analizar."
+        "path",
+        help="Ruta de un archivo YAML o directorio a analizar."
+    )
+
+    parser.add_argument(
+        "--fail-on",
+        choices=["critical", "high", "medium", "low", "none"],
+        default="high",
+        help="Nivel mínimo de severidad que hace fallar el pipeline."
     )
 
     args = parser.parse_args()
 
-    data, raw_text = load_yaml_file(args.file)
-    findings = run_all_rules(data, raw_text)
+    yaml_files = collect_yaml_files(args.path)
+    all_findings_by_file = {}
+    all_findings = []
 
     os.makedirs("reports", exist_ok=True)
 
-    print_findings(findings)
-    save_text_report(findings, "reports/scan-output.txt")
-    generate_sarif(findings, "reports/results.sarif", workflow_path=args.file)
+    for yaml_file in yaml_files:
+        data, raw_text = load_yaml_file(str(yaml_file))
+        findings = run_all_rules(data, raw_text)
+        all_findings_by_file[str(yaml_file)] = findings
+        all_findings.extend(findings)
 
-    if findings:
-        exit(1)
+        print(f"\nArchivo: {yaml_file}")
+        print_findings(findings)
+        save_text_report(findings, "reports/scan-output.txt")
+        generate_sarif(findings, "reports/results.sarif", workflow_path=str(yaml_file))
 
-    exit(0)
+    print_summary(all_findings_by_file)
+
+    if args.fail_on == "none":
+        exit(0)
+
+    fail_threshold = SEVERITY_ORDER.get(args.fail_on.upper(), 1)
+    should_fail = any(
+        SEVERITY_ORDER.get(f["severity"], 3) <= fail_threshold
+        for findings in all_findings_by_file.values()
+        for f in findings
+    )
+
+    exit(1 if should_fail else 0)
 
 
 if __name__ == "__main__":

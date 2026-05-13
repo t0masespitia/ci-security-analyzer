@@ -135,3 +135,51 @@ def test_secure_workflow_has_no_findings():
     findings = run_all_rules(data)
 
     assert len(findings) == 0
+
+
+def test_detects_secret_in_run_script():
+    data = {"jobs": {"deploy": {"steps": [{"run": "export TOKEN=supersecretvalue123"}]}}}
+    findings = run_all_rules(data)
+    assert any(f["rule_id"] == "CICD-SECRET-002" for f in findings)
+
+
+def test_safe_run_script_not_flagged():
+    data = {"jobs": {"deploy": {"steps": [{"run": "echo $TOKEN"}]}}}
+    findings = run_all_rules(data)
+    assert not any(f["rule_id"] == "CICD-SECRET-002" for f in findings)
+
+
+def test_local_action_not_flagged():
+    data = {"jobs": {"build": {"steps": [{"uses": "./my-local-action"}]}}}
+    findings = run_all_rules(data)
+    assert not any(f["rule_id"] == "CICD-ACTION-001" for f in findings)
+
+
+def test_detects_container_image_without_digest():
+    data = {"jobs": {"build": {"container": "ubuntu:22.04", "steps": []}}}
+    findings = run_all_rules(data)
+    assert any(f["rule_id"] == "CICD-IMAGE-001" for f in findings)
+
+
+def test_container_image_with_digest_not_flagged():
+    data = {"jobs": {"build": {"container": {"image": "ubuntu@sha256:abc123def456abc123def456abc123def456abc123def456abc123def456ab12"}, "steps": []}}}
+    findings = run_all_rules(data)
+    assert not any(f["rule_id"] == "CICD-IMAGE-001" for f in findings)
+
+
+def test_detects_self_hosted_runner_without_isolation():
+    data = {"jobs": {"build": {"runs-on": ["self-hosted", "linux"], "steps": []}}}
+    findings = run_all_rules(data)
+    assert any(f["rule_id"] == "CICD-RUNNER-001" for f in findings)
+
+
+def test_self_hosted_runner_with_isolation_not_flagged():
+    data = {"jobs": {"build": {"runs-on": ["self-hosted", "ephemeral", "linux"], "steps": []}}}
+    findings = run_all_rules(data)
+    assert not any(f["rule_id"] == "CICD-RUNNER-001" for f in findings)
+
+
+def test_github_hosted_runner_not_flagged():
+    data = {"jobs": {"build": {"runs-on": "ubuntu-latest", "steps": []}}}
+    findings = run_all_rules(data)
+    assert not any(f["rule_id"] == "CICD-RUNNER-001" for f in findings)

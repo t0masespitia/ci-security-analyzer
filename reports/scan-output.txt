@@ -18,3 +18,21 @@ Título: Posible secreto en texto plano
 Descripción: La variable 'API_KEY' en 'nivel global' parece contener un secreto sin usar GitHub Secrets.
 Recomendación: Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}.
 ------------------------------------------------------------
+Regla: CICD-SECRET-002
+Severidad: CRITICAL
+Título: Posible secreto en texto plano en script
+Descripción: Se detectó un posible secreto en texto plano en el script de job build, step 2
+Recomendación: Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}.
+------------------------------------------------------------
+Regla: CICD-IMAGE-001
+Severidad: MEDIUM
+Título: Imagen de contenedor sin digest SHA256
+Descripción: La imagen 'ubuntu:22.04' en job 'build' no está fijada a un digest SHA256 inmutable.
+Recomendación: Usar el formato imagen@sha256:<hash> para garantizar reproducibilidad e integridad (SLSA-2).
+------------------------------------------------------------
+Regla: CICD-RUNNER-001
+Severidad: MEDIUM
+Título: Runner self-hosted sin etiquetas de aislamiento
+Descripción: El job 'test' usa un runner self-hosted sin etiquetas de aislamiento (ej. ephemeral, docker, isolated). Esto puede permitir persistencia de estado entre ejecuciones.
+Recomendación: Agregar etiquetas de aislamiento al runner o usar entornos efímeros para cada ejecución.
+------------------------------------------------------------

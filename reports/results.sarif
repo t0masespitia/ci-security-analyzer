@@ -19,6 +19,14 @@
               },
               "help": {
                 "text": "Usar permisos mínimos, por ejemplo contents: read."
+              },
+              "properties": {
+                "security-severity": "7.5",
+                "tags": [
+                  "security",
+                  "ci-cd",
+                  "owasp"
+                ]
               }
             },
             {
@@ -32,6 +40,14 @@
               },
               "help": {
                 "text": "Usar un hash de commit completo para reducir riesgos de manipulación."
+              },
+              "properties": {
+                "security-severity": "7.5",
+                "tags": [
+                  "security",
+                  "ci-cd",
+                  "owasp"
+                ]
               }
             },
             {
@@ -45,6 +61,77 @@
               },
               "help": {
                 "text": "Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}."
+              },
+              "properties": {
+                "security-severity": "9.5",
+                "tags": [
+                  "security",
+                  "ci-cd",
+                  "owasp"
+                ]
+              }
+            },
+            {
+              "id": "CICD-SECRET-002",
+              "name": "Posible secreto en texto plano en script",
+              "shortDescription": {
+                "text": "Posible secreto en texto plano en script"
+              },
+              "fullDescription": {
+                "text": "Se detectó un posible secreto en texto plano en el script de job build, step 2"
+              },
+              "help": {
+                "text": "Guardar valores sensibles en GitHub Secrets y referenciarlos con ${{ secrets.NOMBRE }}."
+              },
+              "properties": {
+                "security-severity": "9.5",
+                "tags": [
+                  "security",
+                  "ci-cd",
+                  "owasp"
+                ]
+              }
+            },
+            {
+              "id": "CICD-IMAGE-001",
+              "name": "Imagen de contenedor sin digest SHA256",
+              "shortDescription": {
+                "text": "Imagen de contenedor sin digest SHA256"
+              },
+              "fullDescription": {
+                "text": "La imagen 'ubuntu:22.04' en job 'build' no está fijada a un digest SHA256 inmutable."
+              },
+              "help": {
+                "text": "Usar el formato imagen@sha256:<hash> para garantizar reproducibilidad e integridad (SLSA-2)."
+              },
+              "properties": {
+                "security-severity": "4.5",
+                "tags": [
+                  "security",
+                  "ci-cd",
+                  "owasp"
+                ]
+              }
+            },
+            {
+              "id": "CICD-RUNNER-001",
+              "name": "Runner self-hosted sin etiquetas de aislamiento",
+              "shortDescription": {
+                "text": "Runner self-hosted sin etiquetas de aislamiento"
+              },
+              "fullDescription": {
+                "text": "El job 'test' usa un runner self-hosted sin etiquetas de aislamiento (ej. ephemeral, docker, isolated). Esto puede permitir persistencia de estado entre ejecuciones."
+              },
+              "help": {
+                "text": "Agregar etiquetas de aislamiento al runner o usar entornos efímeros para cada ejecución."
+              },
+              "properties": {
+                "security-severity": "4.5",
+                "tags": [
+                  "security",
+                  "ci-cd",
+                  "owasp"
+                ]
               }
             }
           ]
@@ -57,14 +144,17 @@
           "message": {
             "text": "Permisos write-all detectados: El workflow usa permissions: write-all, lo cual entrega permisos amplios al pipeline."
           },
+          "properties": {
+            "severity": "HIGH"
+          },
           "locations": [
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "examples/vulnerable-workflow.yml"
+                  "uri": "tests/sample_workflow.yml"
                 },
                 "region": {
-                  "startLine": 15
+                  "startLine": 5
                 }
               }
             }
@@ -76,14 +166,17 @@
           "message": {
             "text": "Action sin hash fijo: La acción 'actions/checkout@v3' en el job 'build' no está fijada a un commit SHA."
           },
+          "properties": {
+            "severity": "HIGH"
+          },
           "locations": [
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "examples/vulnerable-workflow.yml"
+                  "uri": "tests/sample_workflow.yml"
                 },
                 "region": {
-                  "startLine": 26
+                  "startLine": 15
                 }
               }
             }
@@ -95,14 +188,71 @@
           "message": {
             "text": "Posible secreto en texto plano: La variable 'API_KEY' en 'nivel global' parece contener un secreto sin usar GitHub Secrets."
           },
+          "properties": {
+            "severity": "CRITICAL"
+          },
           "locations": [
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "examples/vulnerable-workflow.yml"
+                  "uri": "tests/sample_workflow.yml"
                 },
                 "region": {
-                  "startLine": 18
+                  "startLine": 8
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CICD-SECRET-002",
+          "level": "error",
+          "message": {
+            "text": "Posible secreto en texto plano en script: Se detectó un posible secreto en texto plano en el script de job build, step 2"
+          },
+          "properties": {
+            "severity": "CRITICAL"
+          }
+        },
+        {
+          "ruleId": "CICD-IMAGE-001",
+          "level": "warning",
+          "message": {
+            "text": "Imagen de contenedor sin digest SHA256: La imagen 'ubuntu:22.04' en job 'build' no está fijada a un digest SHA256 inmutable."
+          },
+          "properties": {
+            "severity": "MEDIUM"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tests/sample_workflow.yml"
+                },
+                "region": {
+                  "startLine": 13
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CICD-RUNNER-001",
+          "level": "warning",
+          "message": {
+            "text": "Runner self-hosted sin etiquetas de aislamiento: El job 'test' usa un runner self-hosted sin etiquetas de aislamiento (ej. ephemeral, docker, isolated). Esto puede permitir persistencia de estado entre ejecuciones."
+          },
+          "properties": {
+            "severity": "MEDIUM"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tests/sample_workflow.yml"
+                },
+                "region": {
+                  "startLine": 21
                 }
               }
             }
